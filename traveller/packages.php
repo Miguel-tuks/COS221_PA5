@@ -5,7 +5,7 @@ requireTraveller();
 
 $db = getDB();
 
-// Filter parameters (sanitised)
+
 $q         = trim($_GET['q'] ?? '');
 $continent = trim($_GET['continent'] ?? '');
 $country   = trim($_GET['country'] ?? '');
@@ -18,7 +18,6 @@ $page      = max(1, (int)($_GET['page']??1));
 $perPage   = 9;
 $offset    = ($page-1)*$perPage;
 
-// Build WHERE clauses
 $where = ['p.isActive = 1'];
 $params = [];
 
@@ -67,7 +66,7 @@ $stmt = $db->prepare("
 $stmt->execute($params);
 $packages = $stmt->fetchAll();
 
-// Dropdown options
+
 $continents = $db->query("SELECT DISTINCT continent FROM destination WHERE continent IS NOT NULL ORDER BY continent")->fetchAll(PDO::FETCH_COLUMN);
 $countries  = $db->query("SELECT DISTINCT country FROM destination ORDER BY country")->fetchAll(PDO::FETCH_COLUMN);
 
@@ -78,7 +77,7 @@ include __DIR__ . '/../includes/header.php';
     <h1 class="section-title">Browse Packages</h1>
     <p class="section-subtitle"><?= $total ?> package<?= $total!==1?'s':'' ?> found</p>
 
-    <!-- Filters -->
+   
     <form method="GET" class="filter-bar">
         <div class="filter-group" style="flex:2;min-width:180px;">
             <label>Search</label>
@@ -168,14 +167,14 @@ include __DIR__ . '/../includes/header.php';
         <?php endforeach; ?>
     </div>
 
-    <!-- Compare bar -->
+   
     <div id="compare-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;background:var(--cream);border-top:2px solid var(--border);padding:.8rem 1.5rem;display:flex;align-items:center;gap:1rem;z-index:99;box-shadow:0 -4px 20px rgba(0,0,0,.1);">
         <strong>Comparing: </strong><span id="compare-names" style="color:var(--text-muted);flex:1;"></span>
         <a id="compare-link" href="#" class="btn btn-secondary">Compare Packages ⚖️</a>
         <button onclick="clearCompare()" class="btn btn-ghost btn-sm">Clear</button>
     </div>
 
-    <!-- Pagination -->
+    
     <?php if ($pages > 1): ?>
     <div class="pagination">
         <?php for ($i=1; $i<=$pages; $i++):
