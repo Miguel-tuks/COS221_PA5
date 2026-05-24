@@ -1,109 +1,92 @@
 <?php
-require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
-requireAgency();
+requireRole('Travel Agency');
 
-$db = getDB();
-$uid = (int)$_SESSION['userID'];
+$pageTitle = 'Agency dashboard';
+$pdo = getDB();
+$uid = currentUserId();
 
-$agency = $db->prepare('SELECT * FROM travel_agency WHERE userID = ?');
-$agency->execute([$uid]);
-$me = $agency->fetch();
+$me = $pdo->prepare('SELECT * FROM TRAVEL_AGENCY WHERE userID = :u');
+$me->execute([':u' => $uid]);
+$me = $me->fetch();
 
-//stats
-$pkgCount = $db->prepare ('SELECT COUNT(*) FROM package WHERE agencyID = ? AND isActive = 1');
-$pkgCount->execute([$uid]);
-$totalPackages = $pkgCount->fetchColumn();
+$pkgCount = $pdo->prepare('SELECT COUNT(*) FROM PACKAGE WHERE agencyID = :u');
+$pkgCount->execute([':u' => $uid]);
+$pkgCount = (int)$pkgCount->fetchColumn();
 
-$bookCount = $db->prepare('SELECT COUNT(*) FROM booking JOIN package p ON p.packageID = b.packageID WHERE p.agencyID = ?');
-$bookCount->execute([$uid]);
-$totalBookings = $bookCount->fetchColumn();
+$bookCount = $pdo->prepare(
+    'SELECT COUNT(*) FROM BOOKING b
+     JOIN PACKAGE p ON p.packageID = b.packageID
+     WHERE p.agencyID = :u'
+);
+$bookCount->execute([':u' => $uid]);
+$bookCount = (int)$bookCount->fetchColumn();
 
-$revStat = $db->prepare('SELECT COALESCE(AVG(r.rating), 0), COUNT(r.rating) FROM review r JOIN package p ON p.packageID = r.packageID WHERE p.agencyID = ?');
-$revStat->execute([$uid]);
-$totalGroups = $groupCount->fetchColumn();
+$avgRating = $pdo->prepare(
+    'SELECT COALESCE(AVG(r.rating), 0) FROM REVIEW r
+     JOIN PACKAGE p ON p.packageID = r.packageID
+     WHERE p.agencyID = :u'
+);
+$avgRating->execute([':u' => $uid]);
+$avgRating = (float)$avgRating->fetchColumn();
 
-//recent booking for this agency
-$recentBookings = $db->prepare("
-    SELECT b.bookingDate, b.status, b.numPax, b.travellerID,
-           p.pkgName, p.price,
-           t.firstName, t.lastName
-    FROM booking b
-    JOIN package p ON p.packageID=b.packageID
-    JOIN traveller t ON t.userID=b.travellerID
-    WHERE p.agencyID=?
-    ORDER BY b.bookingDate DESC LIMIT 8
-");
-$recentBookings->execute([$uid]);
-$recentBookings = $recentBookings->fetchAll();
+/* Recent bookings */
+$recent = $pdo->prepare(
+    "SELECT b.*, p.pkgName, p.price, t.firstName, t.lastName
+     FROM BOOKING b
+     JOIN PACKAGE   p ON p.packageID  = b.packageID
+     JOIN TRAVELLER t ON t.userID     = b.travellerID
+     WHERE p.agencyID = :u
+     ORDER BY b.bookingDate DESC LIMIT 5"
+);
+$recent->execute([':u' => $uid]);
+$recent = $recent->fetchAll();
 
-$pageTitle = 'Agency Dashboard';
-include __DIR__ . '/../includes/header.php';
-
+require __DIR__ . '/../includes/header.php';
 ?>
 
-<div class="page-wrap">
-    <h1 class="section-title">Welcome back, <?= htmlspecialchars($me['agencyName']) ?> 🏢</h1>
-    <p class="section-subtitle">Here's an overview of your agency's performance.</p>
+<h1>Hi, <?= h($me['agencyName']) ?>!</h1>
+<p class="meta">Manage your packages, group trips and bookings.</p>
 
-    <div class="stats-row">
-        <div class="stat-card">
-            <div class="stat-icon">📦</div>
-            <div class="stat-num"><?= $totalPackages ?></div>
-            <div class="stat-label">Active Packages</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon">🧳</div>
-            <div class="stat-num"><?= $totalBookings ?></div>
-            <div class="stat-label">Total Bookings</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon">⭐</div>
-            <div class="stat-num"><?= round($avgRating,1) ?></div>
-            <div class="stat-label">Avg Rating (<?= $totalReviews ?> reviews)</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon">👥</div>
-            <div class="stat-num"><?= $totalGroups ?></div>
-            <div class="stat-label">Group Trips</div>
-        </div>
-    </div>
-
-    <!--quick actions-->
-    <div style="display:flex;gap:.8rem;flex-wrap:wrap;margin-bottom:2rem;">
-        <a href="/agency/package_form.php" class="btn btn-primary">+ New Package</a>
-        <a href="/agency/packages.php" class="btn btn-outline">📦 Manage Packages</a>
-        <a href="/agency/group_trips.php" class="btn btn-ghost">👥 Group Trips</a>
-        <a href="/agency/manage_items.php" class="btn btn-ghost">🗂 Manage Items</a>
-        <a href="/agency/reviews.php" class="btn btn-ghost">⭐ Reviews</a>
-    </div>
-
-    <!-- recent bookings -->
-    <div class="section-block">
-        <h3>Recent Bookings</h3>
-        <?php if (empty($recentBookings)): ?>
-        <div class="empty-state"><div class="empty-icon">📭</div><p>No bookings yet.</p></div>
-        <?php else: ?>
-        <div class="table-wrap">
-        <table class="data-table">
-            <thead><tr><th>Traveller</th><th>Package</th><th>Date</th><th>Pax</th><th>Revenue</th><th>Status</th></tr></thead>
-            <tbody>
-            <?php foreach ($recentBookings as $b):
-                $statusClass = ['Confirmed'=>'badge-green','Pending'=>'badge-orange','Cancelled'=>'badge-red','Completed'=>'badge-teal'][$b['status']] ?? 'badge-grey';
-            ?>
-            <tr>
-                <td><?= htmlspecialchars($b['firstName'].' '.$b['lastName']) ?></td>
-                <td><?= htmlspecialchars($b['pkgName']) ?></td>
-                <td><?= htmlspecialchars($b['bookingDate']) ?></td>
-                <td><?= $b['numPax'] ?></td>
-                <td><strong>R <?= number_format($b['price']*$b['numPax'],2) ?></strong></td>
-                <td><span class="badge <?= $statusClass ?>"><?= $b['status'] ?></span></td>
-            </tr>
-            <?php endforeach; ?>
-            </tbody>
-        </table>
-        </div>
-        <?php endif; ?>
+<div class="stats">
+    <div class="stat"><div class="stat-num"><?= $pkgCount ?></div><div class="stat-lbl">Packages</div></div>
+    <div class="stat"><div class="stat-num"><?= $bookCount ?></div><div class="stat-lbl">Bookings</div></div>
+    <div class="stat">
+        <div class="stat-num"><?= number_format($avgRating, 1) ?></div>
+        <div class="stat-lbl">Avg rating</div>
     </div>
 </div>
-<?php include __DIR__ . '/../includes/footer.php'; ?>
+
+<div class="section">
+    <h2>Quick actions</h2>
+    <div class="btn-row">
+        <a class="btn btn-primary" href="package_form.php">+ New package</a>
+        <a class="btn btn-primary" href="group_trip_form.php">+ New group trip</a>
+        <a class="btn" href="items.php">Manage catalogue items</a>
+        <a class="btn" href="profile.php">Edit profile</a>
+    </div>
+</div>
+
+<div class="section">
+    <h2>Recent bookings</h2>
+    <?php if (!$recent): ?>
+        <p>No bookings yet.</p>
+    <?php else: ?>
+    <div class="table-wrap"><table class="data">
+        <tr><th>Date</th><th>Traveller</th><th>Package</th><th>Pax</th><th>Total</th><th>Status</th></tr>
+        <?php foreach ($recent as $r): ?>
+        <tr>
+            <td><?= h(date('d M Y', strtotime($r['bookingDate']))) ?></td>
+            <td><?= h($r['firstName']) ?> <?= h($r['lastName']) ?></td>
+            <td><?= h($r['pkgName']) ?></td>
+            <td><?= (int)$r['numPax'] ?></td>
+            <td>R<?= number_format($r['price'] * (int)$r['numPax'], 2) ?></td>
+            <td><span class="status status-<?= h($r['status']) ?>"><?= h(ucfirst($r['status'])) ?></span></td>
+        </tr>
+        <?php endforeach; ?>
+    </table></div>
+    <p style="margin-top:10px"><a href="bookings.php">View all bookings →</a></p>
+    <?php endif; ?>
+</div>
+
+<?php require __DIR__ . '/../includes/footer.php'; ?>
