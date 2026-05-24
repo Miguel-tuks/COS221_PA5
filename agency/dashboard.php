@@ -30,7 +30,7 @@ $avgRating = $pdo->prepare(
 $avgRating->execute([':u' => $uid]);
 $avgRating = (float)$avgRating->fetchColumn();
 
-/* Recent bookings */
+
 $recent = $pdo->prepare(
     "SELECT b.*, p.pkgName, p.price, t.firstName, t.lastName
      FROM BOOKING b
