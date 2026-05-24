@@ -144,4 +144,41 @@ require __DIR__ . '/../includes/header.php';
 </form>
 <?php endif; ?>
 
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var form = document.querySelector('form[action*="compare"]');
+    if (!form) return;
+    var boxes = Array.prototype.slice.call(form.querySelectorAll('input[name="ids[]"]'));
+    if (!boxes.length) return;
+ 
+    var bar = document.createElement('div');
+    bar.className = 'compare-bar';
+    bar.innerHTML = '<span class="count"></span>' +
+                    '<span class="hint"></span>' +
+                    '<button type="button" class="btn btn-primary">Compare</button>';
+    document.body.appendChild(bar);
+ 
+    var countEl = bar.querySelector('.count');
+    var hintEl  = bar.querySelector('.hint');
+    var goBtn   = bar.querySelector('button');
+ 
+    function update() {
+        var n = boxes.filter(function (b) { return b.checked; }).length;
+        boxes.forEach(function (b) { b.disabled = (!b.checked && n >= 3); });
+ 
+        countEl.textContent = n + ' selected';
+        hintEl.textContent  = n < 2 ? 'Pick at least 2' : (n >= 3 ? 'Max reached' : '');
+        goBtn.disabled = n < 2;
+        goBtn.style.opacity = n < 2 ? '.5' : '1';
+        bar.classList.toggle('show', n > 0);
+    }
+ 
+    boxes.forEach(function (b) { b.addEventListener('change', update); });
+    goBtn.addEventListener('click', function () {
+        if (boxes.filter(function (b) { return b.checked; }).length >= 2) form.submit();
+    });
+    update();
+});
+</script>
+
 <?php require __DIR__ . '/../includes/footer.php'; ?>
